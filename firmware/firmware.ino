@@ -8,6 +8,8 @@
 // License MIT
 
 // https://github.com/sweebee/Arduino-home-automation/blob/master/libraries/readVcc/readVcc.h
+//
+// ATTENTION: Connecting the AVCC pin to input voltage supply is required!
 long readVcc() {
   // Read 1.1V reference against AVcc
   // set the reference to Vcc and the measurement to the internal 1.1V reference
@@ -19,17 +21,25 @@ long readVcc() {
     ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
   #endif
 
-  delay(2); // Wait for Vref to settle
+  // some hack
+  ADCSRA |= _BV(ADEN); // enable the ADC
+  uint16_t wADC;
+
+  delay(50); // Wait for Vref to settle
   ADCSRA |= _BV(ADSC); // Start conversion
-  while (bit_is_set(ADCSRA,ADSC)); // measuring
+  while (bit_is_set(ADCSRA, ADSC)); // measuring
 
-  uint8_t low  = ADCL; // must read ADCL first - it then locks ADCH
+  /* uint8_t low  = ADCL; // must read ADCL first - it then locks ADCH
   uint8_t high = ADCH; // unlocks both
+  long result = (high<<8) | low; */
 
-  long result = (high<<8) | low;
+  // Reading register "ADCW" takes care of how to read ADCL first and ADCH then.
+  wADC = ADCW;
 
-  result = 1125300L / result; // Calculate Vcc (in mV); 1125300 = 1.1*1023*1000
-  return result; // Vcc in millivolts
+  // result = 1125300L / result; // Calculate Vcc (in mV); 1125300 = 1.1*1023*1000
+  // return result; // Vcc in millivolts
+
+  return 1125300L / wADC; // Calculate Vcc (in mV); 1125300 = 1.1*1023*1000
 }
 
 void lightOn() {
@@ -44,6 +54,9 @@ void setup() {
   pinMode(11, OUTPUT); // led
   pinMode(A2, OUTPUT); // buzzer
   lightOn();
+
+  // Serial.begin(9600);
+  // Serial.println(readVcc());
 
   // I am using 2 x AAA batteries in series, with the max. output voltage around 2.5v.
   if (readVcc()/1000.0 < 1.9) {
